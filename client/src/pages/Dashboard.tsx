@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useSSE } from "../hooks/useSSE";
 import { Link } from "wouter";
 
-// ── ChipMark SVG ─────────────────────────────────────────────────────────────
+// ── ChipMark SVG ─────────────────────────────────────────────────────
 function ChipMark({ size = 32 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="COMP'D chip mark">
@@ -22,7 +22,7 @@ function ChipMark({ size = 32 }: { size?: number }) {
 }
 
 export default function Dashboard() {
-  const sseData = useSSE();
+  const { state: sseData, connected, notification } = useSSE();
   const [isOn, setIsOn] = useState(false);
   const [loading, setLoading] = useState(false);
   const chartRef = useRef<HTMLCanvasElement>(null);
@@ -167,6 +167,18 @@ export default function Dashboard() {
           <Link href="/settings"><button style={{ background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.2)", color: "#C9A84C", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>⚙ Settings</button></Link>
         </div>
       </nav>
+
+      {/* SSE notification toast */}
+      {notification && (
+        <div style={{
+          position: "fixed", top: 68, right: 20, zIndex: 1000,
+          background: "#1A1815", border: "1px solid rgba(201,168,76,0.4)",
+          borderRadius: 10, padding: "10px 16px", fontSize: 13, color: "#F4EFE6",
+          maxWidth: 360, boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+        }}>
+          {notification}
+        </div>
+      )}
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 20px" }}>
         {/* Stats row */}
