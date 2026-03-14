@@ -29,9 +29,7 @@ export interface IStorage {
 }
 
 // ── File-based persistent storage ───────────────────────────────────────────
-// Data dir: prefer /data (Railway volume) → fallback /tmp/kalshi-btcd-data
-// This survives container restarts within a session and is readable on reload.
-
+// Data dir: prefer /data (Railway volume) → fallback .kalshi-data
 const DATA_DIR = fs.existsSync("/data")
   ? "/data"
   : path.join(process.cwd(), ".kalshi-data");
@@ -65,11 +63,11 @@ const DEFAULT_SETTINGS: BotSettings = {
   id: 1,
   enabled: false,
   riskPercent: 5,
-  minConfidence: 65,
+  minConfidence: 75,
   targetBalance: 100,
   pollInterval: 30,
-  minCushionPct: 0.3,
-  minNoPrice: 65,
+  minCushionPct: 1.0,
+  minNoPrice: 75,
   settingsVersion: 1,
 };
 
@@ -85,7 +83,6 @@ class FileStorage implements IStorage {
   private credIdCounter = 1;
 
   constructor() {
-    // Load persisted data on startup
     const savedCreds = readJson<Credentials | null>(CREDS_FILE, null);
     if (savedCreds) {
       this.creds = savedCreds;
