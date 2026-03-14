@@ -86,41 +86,77 @@ export default function Settings() {
     pollInterval: 30, minCushionPct: 0.3, minNoPrice: 65, enabled: false,
   });
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [creds, setCreds] = useState({ apiKeyId: "", privateKeyPem: "" });
   const [credsSaved, setCredsSaved] = useState(false);
   const [credsError, setCredsError] = useState("");
+  const [existingKeyId, setExistingKeyId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Try /api/settings first (always has current values), fall back to /api/state
-    fetch("/api/settings").then(r => r.json()).then(d => {
-      if (d && d.riskPercent !== undefined) {
-        setSettings({
-          riskPercent: d.riskPercent ?? 5,
-          minConfidence: d.minConfidence ?? 65,
-          targetBalance: d.targetBalance ?? 100,
-          pollInterval: d.pollInterval ?? 30,
-          minCushionPct: d.minCushionPct ?? 0.3,
-          minNoPrice: d.minNoPrice ?? 65,
-          enabled: d.enabled ?? false,
+    // Load current settings from server
+    fetch("/api/settings")
+      .then(r => r.json())
+      .then(d => {
+        if (d && d.riskPercent !== undefined) {
+          setSettings({
+            riskPercent: d.riskPercent ?? 5,
+            minConfidence: d.minConfidence ?? 65,
+            targetBalance: d.targetBalance ?? 100,
+            pollInterval: d.pollInterval ?? 30,
+            minCushionPct: d.minCushionPct ?? 0.3,
+            minNoPrice: d.minNoPrice ?? 65,
+            enabled: d.enabled ?? false,
+          });
+        }
+      })
+      .catch(() => {
+        fetch("/api/state").then(r => r.json()).then(d => {
+          if (d.settings) setSettings(d.settings);
         });
-      }
-    }).catch(() => {
-      fetch("/api/state").then(r => r.json()).then(d => {
-        if (d.settings) setSettings(d.settings);
       });
-    });
+
+    // Check if credentials are already saved
+    fetch("/api/credentials")
+      .then(r => r.json())
+      .then(d => {
+        if (d.connected && d.apiKeyId) {
+          setExistingKeyId(d.apiKeyId);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const update = (key: keyof Settings) => (val: number) => setSettings(s => ({ ...s, [key]: val }));
 
   const save = async () => {
-    await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(settings),
-    });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setSaveError("");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setSaveError(errData.error ?? `Server error ${res.status}`);
+        return;
+      }
+      const confirmed = await res.json();
+      // Update local state with server-confirmed values
+      setSettings({
+        riskPercent: confirmed.riskPercent ?? settings.riskPercent,
+        minConfidence: confirmed.minConfidence ?? settings.minConfidence,
+        targetBalance: confirmed.targetBalance ?? settings.targetBalance,
+        pollInterval: confirmed.pollInterval ?? settings.pollInterval,
+        minCushionPct: confirmed.minCushionPct ?? settings.minCushionPct,
+        minNoPrice: confirmed.minNoPrice ?? settings.minNoPrice,
+        enabled: confirmed.enabled ?? settings.enabled,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e: any) {
+      setSaveError("Network error — settings may not have saved");
+    }
   };
 
   const saveCreds = async () => {
@@ -133,8 +169,15 @@ export default function Settings() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ apiKeyId: creds.apiKeyId.trim(), privateKeyPem: creds.privateKeyPem.trim(), environment: "production" }),
     });
-    if (res.ok) { setCredsSaved(true); setTimeout(() => setCredsSaved(false), 2000); }
-    else setCredsError("Failed to save credentials");
+    if (res.ok) {
+      setCredsSaved(true);
+      setExistingKeyId(creds.apiKeyId.trim().substring(0, 8) + "...");
+      setCreds({ apiKeyId: "", privateKeyPem: "" });
+      setTimeout(() => setCredsSaved(false), 2000);
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      setCredsError(errData.error ?? "Failed to save credentials");
+    }
   };
 
   return (
@@ -169,6 +212,12 @@ export default function Settings() {
           <SettingRow label="Poll Interval" desc="How often to check markets (30s is ideal for hourly markets)" value={settings.pollInterval} onChange={update("pollInterval")} min={10} max={120} step={5} suffix="s" />
         </div>
 
+        {saveError && (
+          <div style={{ marginTop: 10, padding: "10px 14px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, color: "#ef4444", fontSize: 13 }}>
+            {saveError}
+          </div>
+        )}
+
         <button
           onClick={save}
           style={{
@@ -185,10 +234,15 @@ export default function Settings() {
         {/* API Credentials */}
         <div style={{ marginTop: 32 }}>
           <h3 style={{ fontSize: 16, color: "#C9A84C", fontFamily: "'DM Serif Display', serif", marginBottom: 4 }}>API Credentials</h3>
-          <p style={{ fontSize: 12, color: "#7A7468", marginBottom: 16 }}>Kalshi RSA key pair. Stored in memory — re-enter after each Railway restart.</p>
+          <p style={{ fontSize: 12, color: "#7A7468", marginBottom: 16 }}>
+            Kalshi RSA key pair. Credentials are saved to disk and persist across restarts.
+            {existingKeyId && (
+              <span style={{ color: "#4ade80", marginLeft: 6 }}>✓ Connected: {existingKeyId}</span>
+            )}
+          </p>
           <div style={{ background: "#1A1815", border: "1px solid #2E2B26", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
             <input
-              placeholder="Access Key ID"
+              placeholder={existingKeyId ? `Current: ${existingKeyId} — enter new to replace` : "Access Key ID"}
               value={creds.apiKeyId}
               onChange={e => setCreds(c => ({ ...c, apiKeyId: e.target.value }))}
               style={{ padding: "10px 12px", background: "#0D0C0A", border: "1px solid #2E2B26", borderRadius: 8, color: "#F4EFE6", fontSize: 13, fontFamily: "monospace", outline: "none" }}

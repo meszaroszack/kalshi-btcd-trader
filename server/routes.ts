@@ -141,6 +141,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     res.json({ trades });
   });
 
+  app.delete("/api/trades", async (req, res) => {
+    try {
+      await storage.clearTrades();
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ── Engine State ──────────────────────────────────────────────────────────
   app.get("/api/engine/state", async (req, res) => {
     res.json(getState());

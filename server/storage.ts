@@ -19,6 +19,7 @@ export interface IStorage {
   getTrades(limit?: number): Promise<Trade[]>;
   createTrade(trade: InsertTrade): Promise<Trade>;
   updateTrade(id: number, update: Partial<InsertTrade>): Promise<Trade>;
+  clearTrades(): Promise<void>;
 
   getSignals(limit?: number): Promise<Signal[]>;
   createSignal(signal: InsertSignal): Promise<Signal>;
@@ -173,6 +174,13 @@ class FileStorage implements IStorage {
     this.tradeList[idx] = { ...this.tradeList[idx], ...update };
     writeJson(TRADES_FILE, this.tradeList);
     return this.tradeList[idx];
+  }
+
+  async clearTrades(): Promise<void> {
+    this.tradeList = [];
+    this.tradeIdCounter = 1;
+    writeJson(TRADES_FILE, []);
+    console.log("[storage] Trade history cleared");
   }
 
   async getSignals(limit = 50): Promise<Signal[]> {
